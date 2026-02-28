@@ -44,11 +44,7 @@ const TEXT = {
     rangeError: "\uBC94\uC704: \uC9D1\uC911 1~180\uBD84, \uD734\uC2DD 1~60\uBD84",
     langKo: "\uD55C\uAD6D\uC5B4",
     langEn: "\uC601\uC5B4",
-    quickMode: "\uBE60\uB978 \uD14C\uC2A4\uD2B8 \uBAA8\uB4DC",
-    quickModeDesc: "\uC9D1\uC911 10\uCD08 / \uD734\uC2DD 5\uCD08",
     timeEditHint: "\uC2DC\uAC04 \uC124\uC815\uC740 \uC2DC\uC791 \uC804 \uB610\uB294 \uB2E4\uC74C \uC138\uC158 \uB300\uAE30 \uC0C1\uD0DC\uC5D0\uC11C\uB9CC \uBCC0\uACBD\uD560 \uC218 \uC788\uC5B4\uC694.",
-    quickModeOn: "\uCF1C\uAE30",
-    quickModeOff: "\uB044\uAE30",
     goalTitle: "\uC774\uBC88 \uD0C0\uC784 \uBAA9\uD45C",
     goalDesc: "\uC9D1\uC911 \uC2DC\uAC04 \uC2DC\uC791 \uC804\uC5D0 \uBAA9\uD45C\uB97C \uC785\uB825\uD558\uC138\uC694.",
     goalEditTitle: "\uC9D1\uC911 \uBB38\uAD6C \uC218\uC815",
@@ -102,11 +98,7 @@ const TEXT = {
     rangeError: "Range: focus 1-180, break 1-60",
     langKo: "Korean",
     langEn: "English",
-    quickMode: "Quick test mode",
-    quickModeDesc: "Focus 10s / Break 5s",
     timeEditHint: "Time settings can only be changed before first start or while waiting for the next session.",
-    quickModeOn: "On",
-    quickModeOff: "Off",
     goalTitle: "Goal for this session",
     goalDesc: "Set a goal before starting focus time.",
     goalEditTitle: "Edit focus text",
@@ -247,7 +239,6 @@ function LockIcon() {
 export default function Page() {
   const [language, setLanguage] = useState("ko");
   const [theme, setTheme] = useState("light");
-  const [quickMode, setQuickMode] = useState(false);
 
   const t = TEXT[language];
   const th = THEMES[theme];
@@ -266,7 +257,6 @@ export default function Page() {
   const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
   const [languageInput, setLanguageInput] = useState("ko");
   const [themeInput, setThemeInput] = useState("light");
-  const [quickModeInput, setQuickModeInput] = useState(false);
   const [settingsErrorKey, setSettingsErrorKey] = useState("");
   const [showGoalPrompt, setShowGoalPrompt] = useState(false);
   const [showResetPrompt, setShowResetPrompt] = useState(false);
@@ -280,8 +270,8 @@ export default function Page() {
   const [confettiBurstId, setConfettiBurstId] = useState(0);
   const lastLoggedCycleRef = useRef(null);
 
-  const focusDurationSeconds = quickMode ? 10 : focusMinutes * 60;
-  const breakDurationSeconds = quickMode ? 5 : breakMinutes * 60;
+  const focusDurationSeconds = focusMinutes * 60;
+  const breakDurationSeconds = breakMinutes * 60;
   const totalSeconds = isFocusMode ? focusDurationSeconds : breakDurationSeconds;
   const canEditTimeSettings = !isRunning && isFocusMode && remainingSeconds === focusDurationSeconds && currentGoal.trim() === "";
 
@@ -336,7 +326,6 @@ export default function Page() {
     remainingSeconds,
     focusMinutes,
     breakMinutes,
-    quickMode,
     showSettings,
     showGoalPrompt,
     showResetPrompt,
@@ -459,7 +448,6 @@ export default function Page() {
     setBreakInput(String(breakMinutes));
     setLanguageInput(language);
     setThemeInput(theme);
-    setQuickModeInput(quickMode);
     setSettingsErrorKey("");
     setShowSettings(true);
   };
@@ -500,7 +488,6 @@ export default function Page() {
   const saveSettings = () => {
     let nextFocus = focusMinutes;
     let nextBreak = breakMinutes;
-    const nextQuickMode = canEditTimeSettings ? quickModeInput : quickMode;
 
     if (canEditTimeSettings) {
       nextFocus = Number.parseInt(focusInput, 10);
@@ -521,10 +508,9 @@ export default function Page() {
     setTheme(themeInput);
 
     if (canEditTimeSettings) {
-      setQuickMode(nextQuickMode);
       setFocusMinutes(nextFocus);
       setBreakMinutes(nextBreak);
-      setRemainingSeconds(nextQuickMode ? 10 : nextFocus * 60);
+      setRemainingSeconds(nextFocus * 60);
       setCurrentGoal("");
       setGoalInput("");
       setGoalModalMode("start");
@@ -533,7 +519,6 @@ export default function Page() {
     } else {
       setFocusInput(String(focusMinutes));
       setBreakInput(String(breakMinutes));
-      setQuickModeInput(quickMode);
     }
 
     setSettingsErrorKey("");
@@ -632,30 +617,6 @@ export default function Page() {
               </label>
             </div>
 
-            <label className="block">
-              <div className={`mb-2 flex items-center gap-1 text-sm ${thSettings.muted}`}>
-                <span>{tSettings.quickMode}</span>
-                {!canEditTimeSettings ? (
-                  <span className={thSettings.subtle} aria-hidden="true">
-                    <LockIcon />
-                  </span>
-                ) : null}
-              </div>
-              <select
-                value={quickModeInput ? "on" : "off"}
-                onChange={(e) => setQuickModeInput(e.target.value === "on")}
-                disabled={!canEditTimeSettings}
-                className={`w-full rounded-xl border px-3 py-3 outline-none disabled:cursor-not-allowed ${thSettings.input} ${thSettings.disabledInput}`}
-              >
-                <option value="off" className="text-black">
-                  {tSettings.quickModeOff}
-                </option>
-                <option value="on" className="text-black">
-                  {tSettings.quickModeOn}
-                </option>
-              </select>
-              <p className={`mt-1 text-xs ${thSettings.subtle}`}>{tSettings.quickModeDesc}</p>
-            </label>
           </div>
 
           {settingsErrorKey ? <p className="mt-3 text-sm text-red-400">{tSettings[settingsErrorKey]}</p> : null}
@@ -712,7 +673,6 @@ export default function Page() {
               {t.break} {breakMinutes}
               {t.minuteUnit}
             </span>
-            {quickMode ? <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${th.chip}`}>{t.quickModeDesc}</span> : null}
           </div>
           <div
             className={`rounded-2xl border p-6 text-center transition-colors ${isWaitingNextSession ? th.nextSessionTimeBox : isFocusMode ? th.focusTimeBox : th.breakTimeBox}`}
