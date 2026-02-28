@@ -16,19 +16,14 @@ Next.js + Tailwind CSS로 만들었고, PWA 설정까지 되어 있어서 홈 �
 
 ## 스크린샷
 
-아래 경로에 이미지를 넣으면 README에서 바로 보여요.
-
-```text
-docs/screenshot-main.png
-docs/screenshot-settings.png
-docs/screenshot-dark.png
-```
 
 예시:
 
-![메인 화면](docs/screenshot-main.png)
-![설정 화면](docs/screenshot-settings.png)
-![다크 모드](docs/screenshot-dark.png)
+<p align="center">
+  <img src="docs/screenshot-main.png" alt="메인 화면" width="32%" />
+  <img src="docs/screenshot-settings.png" alt="설정 화면" width="32%" />
+  <img src="docs/screenshot-dark.png" alt="다크 모드" width="32%" />
+</p>
 
 ## 기술 스택
 
