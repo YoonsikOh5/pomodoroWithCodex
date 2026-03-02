@@ -29,6 +29,9 @@ const TEXT = {
     breakMinutes: "\uD734\uC2DD \uC2DC\uAC04 (\uBD84)",
     language: "\uC5B8\uC5B4",
     theme: "\uD14C\uB9C8",
+    progressBar: "\uC9C4\uD589\uC0C1\uD0DC\uD45C\uC2DC",
+    progressBarNone: "\uC5C6\uC74C",
+    progressBarRunner: "\uB2EC\uB824\uB77C \uC090\uC57D\uC774",
     light: "\uB77C\uC774\uD2B8",
     dark: "\uB2E4\uD06C",
     save: "\uC800\uC7A5",
@@ -83,6 +86,9 @@ const TEXT = {
     breakMinutes: "Break minutes",
     language: "Language",
     theme: "Theme",
+    progressBar: "Progress bar",
+    progressBarNone: "None",
+    progressBarRunner: "Runner bar",
     light: "Light",
     dark: "Dark",
     save: "Save",
@@ -196,6 +202,8 @@ export default function Page() {
     breakInput,
     languageInput,
     themeInput,
+    progressBarType,
+    progressBarInput,
     settingsErrorKey,
     showGoalPrompt,
     showResetPrompt,
@@ -216,6 +224,7 @@ export default function Page() {
     setBreakInput,
     setLanguageInput,
     setThemeInput,
+    setProgressBarInput,
     setGoalInput,
     onStart,
     onPause,
@@ -249,11 +258,13 @@ export default function Page() {
         breakInput={breakInput}
         languageInput={languageInput}
         themeInput={themeInput}
+        progressBarInput={progressBarInput}
         settingsErrorKey={settingsErrorKey}
         onFocusInputChange={setFocusInput}
         onBreakInputChange={setBreakInput}
         onLanguageChange={setLanguageInput}
         onThemeChange={setThemeInput}
+        onProgressBarChange={setProgressBarInput}
         onClose={closeSettings}
         onSave={saveSettings}
       />
@@ -328,7 +339,7 @@ export default function Page() {
             </p>
           </div>
 
-          <div className={`relative mt-4 h-14 rounded-2xl border ${th.raceTrack}`}>
+          {progressBarType === "runner" ? <div className={`relative mt-4 h-14 rounded-2xl border ${th.raceTrack}`}>
             <div className={`absolute left-10 right-10 top-1/2 h-1 -translate-y-1/2 rounded-full ${th.raceLine}`} />
 
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm">{"\u{1F6A9}"}</span>
@@ -340,7 +351,7 @@ export default function Page() {
             >
               {isRunning ? "🐥" : "🐣"}
             </div>
-          </div>
+          </div> : null}
         </div>
 
         <SessionHistoryPanel th={th} t={t} sessionHistory={sessionHistory} formatSeconds={formatSeconds} />

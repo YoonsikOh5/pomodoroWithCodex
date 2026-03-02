@@ -22,6 +22,8 @@ export default function usePomodoroTimer() {
   const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
   const [languageInput, setLanguageInput] = useState("ko");
   const [themeInput, setThemeInput] = useState("light");
+  const [progressBarType, setProgressBarType] = useState("runner");
+  const [progressBarInput, setProgressBarInput] = useState("runner");
   const [settingsErrorKey, setSettingsErrorKey] = useState("");
   const [showGoalPrompt, setShowGoalPrompt] = useState(false);
   const [showResetPrompt, setShowResetPrompt] = useState(false);
@@ -213,6 +215,7 @@ export default function usePomodoroTimer() {
     setBreakInput(String(breakMinutes));
     setLanguageInput(language);
     setThemeInput(theme);
+    setProgressBarInput(progressBarType);
     setSettingsErrorKey("");
     setShowSettings(true);
   };
@@ -270,6 +273,7 @@ export default function usePomodoroTimer() {
 
     setLanguage(languageInput);
     setTheme(themeInput);
+    setProgressBarType(progressBarInput);
 
     if (canEditTimeSettings) {
       setFocusMinutes(nextFocus);
@@ -296,6 +300,7 @@ export default function usePomodoroTimer() {
   return {
     language,
     theme,
+    progressBarType,
     isRunning,
     isFocusMode,
     cycle,
@@ -308,6 +313,7 @@ export default function usePomodoroTimer() {
     breakInput,
     languageInput,
     themeInput,
+    progressBarInput,
     settingsErrorKey,
     showGoalPrompt,
     showResetPrompt,
@@ -328,6 +334,7 @@ export default function usePomodoroTimer() {
     setBreakInput,
     setLanguageInput,
     setThemeInput,
+    setProgressBarInput,
     setGoalInput,
     onStart,
     onPause,

@@ -8,11 +8,13 @@ export default function SettingsView({
   breakInput,
   languageInput,
   themeInput,
+  progressBarInput,
   settingsErrorKey,
   onFocusInputChange,
   onBreakInputChange,
   onLanguageChange,
   onThemeChange,
+  onProgressBarChange,
   onClose,
   onSave,
 }) {
@@ -95,6 +97,18 @@ export default function SettingsView({
               </select>
             </label>
           </div>
+
+          <label className="block">
+            <span className={`mb-2 block text-sm ${thSettings.muted}`}>{tSettings.progressBar}</span>
+            <select value={progressBarInput} onChange={(e) => onProgressBarChange(e.target.value)} className={`w-full rounded-xl border px-3 py-3 outline-none ${thSettings.input}`}>
+              <option value="runner" className="text-black">
+                {tSettings.progressBarRunner}
+              </option>
+              <option value="none" className="text-black">
+                {tSettings.progressBarNone}
+              </option>
+            </select>
+          </label>
         </div>
 
         {settingsErrorKey ? <p className="mt-3 text-sm text-red-400">{tSettings[settingsErrorKey]}</p> : null}
