@@ -4,6 +4,112 @@ import { CONFETTI_DURATION_MS } from "./confetti";
 const DEFAULT_FOCUS_MINUTES = 50;
 const DEFAULT_BREAK_MINUTES = 10;
 const PROGRESS_BAR_TYPES = ["circle", "runner", "none"];
+const PERSIST_STORAGE_KEY = "pomodoro:persist:v1";
+const LANGUAGES = ["ko", "en"];
+const THEMES = ["light", "dark"];
+const STATUS_KEYS = ["ready", "running", "rest", "focusDone", "breakDone", "paused"];
+
+function clampInteger(value, min, max, fallback) {
+  if (!Number.isFinite(value)) return fallback;
+  const intValue = Math.floor(value);
+  if (intValue < min || intValue > max) return fallback;
+  return intValue;
+}
+
+function normalizeHistory(items) {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .map((item, index) => {
+      const cycle = clampInteger(item?.cycle, 1, 999999, null);
+      if (cycle === null) return null;
+
+      const focusElapsedSeconds = clampInteger(item?.focusElapsedSeconds, 0, 180 * 60, 0);
+      const goal = typeof item?.goal === "string" ? item.goal : "";
+      const id = item?.id ?? `${Date.now()}-${index}-${Math.random()}`;
+
+      return {
+        id,
+        cycle,
+        goal,
+        focusElapsedSeconds,
+      };
+    })
+    .filter(Boolean);
+}
+
+function restoreSnapshot(snapshot, focusDurationSeconds, breakDurationSeconds) {
+  const initialIsFocusMode = snapshot?.isFocusMode !== false;
+  const initialCycle = clampInteger(snapshot?.cycle, 1, 999999, 1);
+  const initialRemaining = clampInteger(
+    snapshot?.remainingSeconds,
+    0,
+    initialIsFocusMode ? focusDurationSeconds : breakDurationSeconds,
+    initialIsFocusMode ? focusDurationSeconds : breakDurationSeconds
+  );
+  const initialIsRunning = Boolean(snapshot?.isRunning);
+  const initialCurrentGoal = typeof snapshot?.currentGoal === "string" ? snapshot.currentGoal : "";
+  const initialStatusKey = STATUS_KEYS.includes(snapshot?.statusKey) ? snapshot.statusKey : initialIsRunning ? "running" : "ready";
+
+  let isFocusMode = initialIsFocusMode;
+  let cycle = initialCycle;
+  let remainingSeconds = initialRemaining;
+  let isRunning = initialIsRunning;
+  let currentGoal = initialCurrentGoal;
+  let statusKey = initialStatusKey;
+  const completedFocusEntries = [];
+
+  if (isRunning) {
+    const savedAt = Number.isFinite(snapshot?.savedAt) ? snapshot.savedAt : Date.now();
+    let elapsedSeconds = Math.max(0, Math.floor((Date.now() - savedAt) / 1000));
+
+    while (elapsedSeconds > 0 && isRunning) {
+      if (elapsedSeconds < remainingSeconds) {
+        remainingSeconds -= elapsedSeconds;
+        elapsedSeconds = 0;
+        break;
+      }
+
+      elapsedSeconds -= remainingSeconds;
+
+      if (isFocusMode) {
+        completedFocusEntries.push({
+          cycle,
+          goal: currentGoal.trim(),
+          focusElapsedSeconds: focusDurationSeconds,
+        });
+        isFocusMode = false;
+        statusKey = "focusDone";
+        remainingSeconds = breakDurationSeconds;
+        continue;
+      }
+
+      isFocusMode = true;
+      cycle += 1;
+      currentGoal = "";
+      isRunning = false;
+      statusKey = "ready";
+      remainingSeconds = focusDurationSeconds;
+      break;
+    }
+
+    if (isRunning && statusKey !== "focusDone") {
+      statusKey = "running";
+    }
+  } else if (statusKey === "running") {
+    statusKey = "rest";
+  }
+
+  return {
+    isFocusMode,
+    cycle,
+    remainingSeconds,
+    isRunning,
+    currentGoal,
+    statusKey,
+    completedFocusEntries,
+  };
+}
 
 export default function usePomodoroTimer() {
   const [language, setLanguage] = useState("ko");
@@ -42,6 +148,7 @@ export default function usePomodoroTimer() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [confettiBurstId, setConfettiBurstId] = useState(0);
   const lastLoggedCycleRef = useRef(null);
+  const hasHydratedRef = useRef(false);
 
   const focusDurationSeconds = focusMinutes * 60;
   const breakDurationSeconds = breakMinutes * 60;
@@ -52,6 +159,104 @@ export default function usePomodoroTimer() {
     if (totalSeconds <= 0) return 0;
     return Math.min(100, Math.max(0, ((totalSeconds - remainingSeconds) / totalSeconds) * 100));
   }, [remainingSeconds, totalSeconds]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem(PERSIST_STORAGE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw);
+      const persistedSettings = parsed?.settings ?? {};
+
+      const nextFocusMinutes = clampInteger(persistedSettings.focusMinutes, 1, 180, DEFAULT_FOCUS_MINUTES);
+      const nextBreakMinutes = clampInteger(persistedSettings.breakMinutes, 1, 60, DEFAULT_BREAK_MINUTES);
+      const nextLanguage = LANGUAGES.includes(persistedSettings.language) ? persistedSettings.language : "ko";
+      const nextTheme = THEMES.includes(persistedSettings.theme) ? persistedSettings.theme : "light";
+      const nextProgressBarType = PROGRESS_BAR_TYPES.includes(persistedSettings.progressBarType)
+        ? persistedSettings.progressBarType
+        : "circle";
+
+      setFocusMinutes(nextFocusMinutes);
+      setBreakMinutes(nextBreakMinutes);
+      setFocusInput(String(nextFocusMinutes));
+      setBreakInput(String(nextBreakMinutes));
+      setLanguage(nextLanguage);
+      setLanguageInput(nextLanguage);
+      setTheme(nextTheme);
+      setThemeInput(nextTheme);
+      setProgressBarType(nextProgressBarType);
+      setProgressBarInput(nextProgressBarType);
+
+      const restoredHistory = normalizeHistory(parsed?.sessionHistory);
+      const restoredSnapshot = restoreSnapshot(parsed?.snapshot, nextFocusMinutes * 60, nextBreakMinutes * 60);
+      const downtimeHistory = restoredSnapshot.completedFocusEntries.map((entry, index) => ({
+        ...entry,
+        id: `${Date.now()}-${entry.cycle}-${index}`,
+      }));
+      const nextSessionHistory = [...restoredHistory, ...downtimeHistory];
+      const maxLoggedCycle = nextSessionHistory.reduce((max, entry) => Math.max(max, entry.cycle), 0);
+
+      setSessionHistory(nextSessionHistory);
+      lastLoggedCycleRef.current = maxLoggedCycle > 0 ? maxLoggedCycle : null;
+
+      setIsFocusMode(restoredSnapshot.isFocusMode);
+      setCycle(restoredSnapshot.cycle);
+      setRemainingSeconds(restoredSnapshot.remainingSeconds);
+      setIsRunning(restoredSnapshot.isRunning);
+      setCurrentGoal(restoredSnapshot.currentGoal);
+      setGoalInput(restoredSnapshot.currentGoal);
+      setStatusKey(restoredSnapshot.statusKey);
+    } catch (error) {
+      console.error("Failed to restore persisted pomodoro state", error);
+    } finally {
+      hasHydratedRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedRef.current) return;
+
+    const payload = {
+      settings: {
+        focusMinutes,
+        breakMinutes,
+        language,
+        theme,
+        progressBarType,
+      },
+      sessionHistory,
+      snapshot: {
+        isFocusMode,
+        cycle,
+        remainingSeconds,
+        isRunning,
+        currentGoal,
+        statusKey,
+        savedAt: Date.now(),
+      },
+    };
+
+    try {
+      window.localStorage.setItem(PERSIST_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.error("Failed to persist pomodoro state", error);
+    }
+  }, [
+    focusMinutes,
+    breakMinutes,
+    language,
+    theme,
+    progressBarType,
+    sessionHistory,
+    isFocusMode,
+    cycle,
+    remainingSeconds,
+    isRunning,
+    currentGoal,
+    statusKey,
+  ]);
 
   useEffect(() => {
     if (!isRunning || showSettings || showGoalPrompt || showResetPrompt || showSkipPrompt) return;
