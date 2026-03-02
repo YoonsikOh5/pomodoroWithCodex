@@ -39,6 +39,7 @@ const TEXT = {
     save: "\uC800\uC7A5",
     backToTimer: "\uD0C0\uC774\uBA38\uB85C \uB3CC\uC544\uAC00\uAE30",
     start: "\uC2DC\uC791",
+    resume: "\uB2E4\uC2DC \uC2DC\uC791\uD558\uAE30",
     nextSessionStart: "\uB2E4\uC74C \uC138\uC158 \uC2DC\uC791\uD558\uAE30",
     pause: "\uC77C\uC2DC\uC815\uC9C0",
     skip: "\uC2A4\uD0B5",
@@ -98,6 +99,7 @@ const TEXT = {
     save: "Save",
     backToTimer: "Back to timer",
     start: "Start",
+    resume: "Resume",
     nextSessionStart: "Start next session",
     pause: "Pause",
     skip: "Skip",
@@ -283,13 +285,16 @@ export default function Page() {
       : progressBarType === "runner"
         ? t.progressBarRunner
         : t.progressBarNone;
+  const isPaused = !isRunning && remainingSeconds < (isFocusMode ? focusMinutes * 60 : breakMinutes * 60);
   const startButtonLabel =
     isRunning
       ? t.pause
-      : isWaitingNextSession
+      : isPaused
+        ? t.resume
+        : isWaitingNextSession
         ? t.nextSessionStart
         : t.start;
-  const startButtonClass = isRunning ? th.pauseBtn : isWaitingNextSession ? th.nextSessionBtn : th.primaryBtn;
+  const startButtonClass = isRunning ? th.pauseBtn : isPaused || isWaitingNextSession ? th.nextSessionBtn : th.primaryBtn;
   const timerRingSize = 240;
   const timerRingStroke = 10;
   const timerRingRadius = (timerRingSize - timerRingStroke) / 2;
