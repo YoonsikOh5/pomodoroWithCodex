@@ -48,3 +48,12 @@ export function SkipIcon() {
     </svg>
   );
 }
+
+export function ProgressFlagIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 4v16" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 5h11l-2.4 3L17 11H6z" />
+    </svg>
+  );
+}

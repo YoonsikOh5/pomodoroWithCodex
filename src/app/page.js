@@ -2,7 +2,7 @@
 
 import { CONFETTI_PIECES } from "./pomodoro/confetti";
 import { formatSeconds } from "./pomodoro/format";
-import { EditIcon, GearIcon, ResetIcon, SkipIcon } from "./pomodoro/icons";
+import { EditIcon, GearIcon, ProgressFlagIcon, ResetIcon, SkipIcon } from "./pomodoro/icons";
 import ConfettiOverlay from "./pomodoro/components/ConfettiOverlay";
 import ConfirmModal from "./pomodoro/components/ConfirmModal";
 import GoalPromptModal from "./pomodoro/components/GoalPromptModal";
@@ -32,6 +32,8 @@ const TEXT = {
     progressBar: "\uC9C4\uD589\uC0C1\uD0DC\uD45C\uC2DC",
     progressBarNone: "\uC5C6\uC74C",
     progressBarRunner: "\uB2EC\uB824\uB77C \uC090\uC57D\uC774",
+    progressBarCircle: "\uC6D0\uD615 \uC9C4\uD589\uBC14",
+    toggleProgressBar: "\uC9C4\uD589\uC0C1\uD0DC\uD45C\uC2DC \uBC14\uAFB8\uAE30",
     light: "\uB77C\uC774\uD2B8",
     dark: "\uB2E4\uD06C",
     save: "\uC800\uC7A5",
@@ -89,6 +91,8 @@ const TEXT = {
     progressBar: "Progress bar",
     progressBarNone: "None",
     progressBarRunner: "Runner bar",
+    progressBarCircle: "Circle ring",
+    toggleProgressBar: "Toggle progress display",
     light: "Light",
     dark: "Dark",
     save: "Save",
@@ -240,6 +244,7 @@ export default function Page() {
     openGoalEditor,
     submitGoal,
     saveSettings,
+    toggleProgressBarType,
   } = usePomodoroTimer();
 
   const t = TEXT[language];
@@ -272,6 +277,12 @@ export default function Page() {
   }
 
   const focusLabel = statusKey === "rest" ? t.rest : currentGoal || t.focus;
+  const progressBarLabel =
+    progressBarType === "circle"
+      ? t.progressBarCircle
+      : progressBarType === "runner"
+        ? t.progressBarRunner
+        : t.progressBarNone;
   const startButtonLabel =
     isRunning
       ? t.pause
@@ -279,6 +290,23 @@ export default function Page() {
         ? t.nextSessionStart
         : t.start;
   const startButtonClass = isRunning ? th.pauseBtn : isWaitingNextSession ? th.nextSessionBtn : th.primaryBtn;
+  const timerRingSize = 240;
+  const timerRingStroke = 10;
+  const timerRingRadius = (timerRingSize - timerRingStroke) / 2;
+  const timerRingCircumference = 2 * Math.PI * timerRingRadius;
+  const timerRingOffset = timerRingCircumference * (1 - progressPercent / 100);
+  const timerRingTrackStroke = theme === "dark" ? "rgba(255,255,255,0.22)" : "rgba(148,163,184,0.35)";
+  const timerRingProgressStroke = isWaitingNextSession
+    ? theme === "dark"
+      ? "#fda4af"
+      : "#fb7185"
+    : isFocusMode
+      ? theme === "dark"
+        ? "#7dd3fc"
+        : "#0284c7"
+      : theme === "dark"
+        ? "#6ee7b7"
+        : "#059669";
 
   return (
     <main className={`min-h-[100dvh] ${th.page} px-3 py-4 ${th.text}`}>
@@ -303,41 +331,98 @@ export default function Page() {
         </header>
 
         <div className={`mt-7 rounded-3xl border p-5 ${th.panel}`}>
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${th.focusMiniChip}`}>
-              {t.focus} {focusMinutes}
-              {t.minuteUnit}
-            </span>
-            <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${th.breakMiniChip}`}>
-              {t.break} {breakMinutes}
-              {t.minuteUnit}
-            </span>
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${th.focusMiniChip}`}>
+                {t.focus} {focusMinutes}
+                {t.minuteUnit}
+              </span>
+              <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${th.breakMiniChip}`}>
+                {t.break} {breakMinutes}
+                {t.minuteUnit}
+              </span>
+            </div>
+            <button
+              onClick={toggleProgressBarType}
+              aria-label={t.toggleProgressBar}
+              title={`${t.progressBar}: ${progressBarLabel}`}
+              className={`shrink-0 inline-flex items-center justify-center rounded-full border px-2.5 py-0.5 text-[11px] leading-none transition ${th.icon}`}
+            >
+              <ProgressFlagIcon />
+            </button>
           </div>
-          <div
-            className={`rounded-2xl border p-6 text-center transition-colors ${isWaitingNextSession ? th.nextSessionTimeBox : isFocusMode ? th.focusTimeBox : th.breakTimeBox}`}
-          >
-            <div className="grid grid-cols-[20px_1fr_20px] items-center gap-2">
-              <span className="h-5 w-5" aria-hidden="true" />
-              <p className={`truncate text-center text-xs font-medium tracking-[0.06em] ${th.subtle}`}>{isFocusMode ? focusLabel : t.break}</p>
-              <div className="flex justify-end">
-                {canEditGoal ? (
-                  <button
-                    onClick={openGoalEditor}
-                    aria-label={t.editGoal}
-                    className={`inline-flex h-5 w-5 items-center justify-center rounded-md border transition ${th.icon}`}
-                  >
-                    <EditIcon />
-                  </button>
-                ) : (
-                  <span className="h-5 w-5" aria-hidden="true" />
-                )}
+          {progressBarType === "circle" ? (
+            <div className="relative mx-auto mt-2" style={{ width: timerRingSize, height: timerRingSize }}>
+              <svg viewBox={`0 0 ${timerRingSize} ${timerRingSize}`} className="absolute inset-0 -rotate-90" aria-hidden="true">
+                <circle
+                  cx={timerRingSize / 2}
+                  cy={timerRingSize / 2}
+                  r={timerRingRadius}
+                  fill="none"
+                  stroke={timerRingTrackStroke}
+                  strokeWidth={timerRingStroke}
+                />
+                <circle
+                  cx={timerRingSize / 2}
+                  cy={timerRingSize / 2}
+                  r={timerRingRadius}
+                  fill="none"
+                  stroke={timerRingProgressStroke}
+                  strokeWidth={timerRingStroke}
+                  strokeLinecap="round"
+                  strokeDasharray={timerRingCircumference}
+                  strokeDashoffset={timerRingOffset}
+                  className="transition-[stroke-dashoffset] duration-500"
+                />
+              </svg>
+
+              <div className="relative z-10 flex h-full flex-col items-center justify-center px-4 text-center">
+                <div className="relative w-full max-w-[170px]">
+                  <p className={`truncate text-center text-xs font-medium tracking-[0.06em] ${th.subtle}`}>{isFocusMode ? focusLabel : t.break}</p>
+                  {canEditGoal ? (
+                    <button
+                      onClick={openGoalEditor}
+                      aria-label={t.editGoal}
+                      className={`absolute right-0 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md border transition ${th.icon}`}
+                    >
+                      <EditIcon />
+                    </button>
+                  ) : null}
+                </div>
+
+                <p className="timer-font mt-3 text-5xl font-medium leading-none sm:text-6xl">{formatSeconds(remainingSeconds)}</p>
+                <p className={`mt-3 text-xs ${th.subtle}`}>
+                  {t.cycle} {cycle}
+                </p>
               </div>
             </div>
-            <p className="timer-font mt-3 text-6xl font-medium leading-none sm:text-7xl">{formatSeconds(remainingSeconds)}</p>
-            <p className={`mt-3 text-xs ${th.subtle}`}>
-              {t.cycle} {cycle}
-            </p>
-          </div>
+          ) : (
+            <div
+              className={`rounded-2xl border p-6 text-center transition-colors ${isWaitingNextSession ? th.nextSessionTimeBox : isFocusMode ? th.focusTimeBox : th.breakTimeBox}`}
+            >
+              <div className="grid grid-cols-[20px_1fr_20px] items-center gap-2">
+                <span className="h-5 w-5" aria-hidden="true" />
+                <p className={`truncate text-center text-xs font-medium tracking-[0.06em] ${th.subtle}`}>{isFocusMode ? focusLabel : t.break}</p>
+                <div className="flex justify-end">
+                  {canEditGoal ? (
+                    <button
+                      onClick={openGoalEditor}
+                      aria-label={t.editGoal}
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-md border transition ${th.icon}`}
+                    >
+                      <EditIcon />
+                    </button>
+                  ) : (
+                    <span className="h-5 w-5" aria-hidden="true" />
+                  )}
+                </div>
+              </div>
+              <p className="timer-font mt-3 text-6xl font-medium leading-none sm:text-7xl">{formatSeconds(remainingSeconds)}</p>
+              <p className={`mt-3 text-xs ${th.subtle}`}>
+                {t.cycle} {cycle}
+              </p>
+            </div>
+          )}
 
           {progressBarType === "runner" ? <div className={`relative mt-4 h-14 rounded-2xl border ${th.raceTrack}`}>
             <div className={`absolute left-10 right-10 top-1/2 h-1 -translate-y-1/2 rounded-full ${th.raceLine}`} />

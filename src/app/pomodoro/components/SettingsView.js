@@ -104,6 +104,9 @@ export default function SettingsView({
               <option value="runner" className="text-black">
                 {tSettings.progressBarRunner}
               </option>
+              <option value="circle" className="text-black">
+                {tSettings.progressBarCircle}
+              </option>
               <option value="none" className="text-black">
                 {tSettings.progressBarNone}
               </option>

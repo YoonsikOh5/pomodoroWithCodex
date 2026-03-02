@@ -3,6 +3,7 @@ import { CONFETTI_DURATION_MS } from "./confetti";
 
 const DEFAULT_FOCUS_MINUTES = 50;
 const DEFAULT_BREAK_MINUTES = 10;
+const PROGRESS_BAR_TYPES = ["circle", "runner", "none"];
 
 export default function usePomodoroTimer() {
   const [language, setLanguage] = useState("ko");
@@ -22,8 +23,8 @@ export default function usePomodoroTimer() {
   const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
   const [languageInput, setLanguageInput] = useState("ko");
   const [themeInput, setThemeInput] = useState("light");
-  const [progressBarType, setProgressBarType] = useState("runner");
-  const [progressBarInput, setProgressBarInput] = useState("runner");
+  const [progressBarType, setProgressBarType] = useState("circle");
+  const [progressBarInput, setProgressBarInput] = useState("circle");
   const [settingsErrorKey, setSettingsErrorKey] = useState("");
   const [showGoalPrompt, setShowGoalPrompt] = useState(false);
   const [showResetPrompt, setShowResetPrompt] = useState(false);
@@ -44,7 +45,7 @@ export default function usePomodoroTimer() {
 
   const progressPercent = useMemo(() => {
     if (totalSeconds <= 0) return 0;
-    return Math.round(Math.min(100, Math.max(0, ((totalSeconds - remainingSeconds) / totalSeconds) * 100)));
+    return Math.min(100, Math.max(0, ((totalSeconds - remainingSeconds) / totalSeconds) * 100));
   }, [remainingSeconds, totalSeconds]);
 
   useEffect(() => {
@@ -293,6 +294,16 @@ export default function usePomodoroTimer() {
     setShowSettings(false);
   };
 
+  const toggleProgressBarType = () => {
+    setProgressBarType((prev) => {
+      const currentIndex = PROGRESS_BAR_TYPES.indexOf(prev);
+      const safeIndex = currentIndex === -1 ? 0 : currentIndex;
+      const nextType = PROGRESS_BAR_TYPES[(safeIndex + 1) % PROGRESS_BAR_TYPES.length];
+      setProgressBarInput(nextType);
+      return nextType;
+    });
+  };
+
   const canEditGoal = isFocusMode && (isRunning || remainingSeconds !== focusDurationSeconds || Boolean(currentGoal.trim()));
   const isWaitingNextSession = !isRunning && isFocusMode && remainingSeconds === focusDurationSeconds && cycle > 1;
   const canShowSkip = canEditGoal || !isFocusMode;
@@ -350,5 +361,6 @@ export default function usePomodoroTimer() {
     openGoalEditor,
     submitGoal,
     saveSettings,
+    toggleProgressBarType,
   };
 }
