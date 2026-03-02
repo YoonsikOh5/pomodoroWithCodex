@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CONFETTI_DURATION_MS, CONFETTI_PIECES } from "./pomodoro/confetti";
+import { formatSeconds } from "./pomodoro/format";
+import { EditIcon, GearIcon, ResetIcon, SkipIcon } from "./pomodoro/icons";
+import ConfettiOverlay from "./pomodoro/components/ConfettiOverlay";
+import ConfirmModal from "./pomodoro/components/ConfirmModal";
+import GoalPromptModal from "./pomodoro/components/GoalPromptModal";
+import SessionHistoryPanel from "./pomodoro/components/SessionHistoryPanel";
+import SettingsView from "./pomodoro/components/SettingsView";
 
 const DEFAULT_FOCUS_MINUTES = 50;
 const DEFAULT_BREAK_MINUTES = 10;
@@ -174,67 +182,6 @@ const THEMES = {
     runnerBadge: "bg-slate-900/90 border-sky-300/45",
   },
 };
-
-const CONFETTI_DURATION_MS = 7000;
-const CONFETTI_COLORS = ["#38bdf8", "#60a5fa", "#22d3ee", "#34d399", "#fbbf24", "#fb7185", "#c084fc", "#f97316", "#fde047", "#fca5a5"];
-const CONFETTI_COUNT = 96;
-const CONFETTI_EMITTERS = [22, 50, 78];
-const CONFETTI_PIECES = Array.from({ length: CONFETTI_COUNT }, (_, idx) => {
-  const emitter = CONFETTI_EMITTERS[idx % CONFETTI_EMITTERS.length];
-  const theta = (((idx * 137) % 360) * Math.PI) / 180;
-  const spread = 90 + (idx % 9) * 15;
-  return {
-    left: emitter + ((idx % 5) - 2) * 1.1,
-    top: 7 + (idx % 6) * 0.45,
-    tx: Math.cos(theta) * spread,
-    ty: Math.abs(Math.sin(theta)) * (spread + 90) + 90,
-    rotate: 120 + ((idx * 53) % 720),
-    width: 6 + (idx % 4) * 2,
-    height: 10 + (idx % 5) * 2,
-    delay: (idx % 8) * 0.04,
-    duration: 6 + (idx % 6) * 0.2,
-    color: CONFETTI_COLORS[idx % CONFETTI_COLORS.length],
-  };
-});
-
-function formatSeconds(totalSeconds) {
-  const minutes = Math.floor(totalSeconds / 60)
-    .toString()
-    .padStart(2, "0");
-  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
-  return `${minutes}:${seconds}`;
-}
-
-function GearIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.572c1.756.427 1.756 2.925 0 3.351a1.724 1.724 0 00-1.066 2.573c.94 1.543-.827 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.827-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.827-3.31 2.37-2.37.996.607 2.296.07 2.573-1.066z"
-      />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  );
-}
-
-function EditIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.9">
-      <rect x="5" y="11" width="14" height="9" rx="2" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V8a4 4 0 1 1 8 0v3" />
-    </svg>
-  );
-}
 
 export default function Page() {
   const [language, setLanguage] = useState("ko");
@@ -530,102 +477,22 @@ export default function Page() {
     const thSettings = THEMES[themeInput];
 
     return (
-      <main className={`min-h-[100dvh] ${thSettings.page} px-3 py-4 ${thSettings.text}`}>
-        <section className={`mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-[420px] flex-col rounded-[30px] border p-5 backdrop-blur-2xl ${thSettings.shell}`}>
-          <div className="mb-4 flex items-center justify-between gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">{tSettings.settings}</h1>
-            <button onClick={closeSettings} className={`rounded-xl border px-3 py-2 text-xs font-medium transition ${thSettings.secondaryBtn}`}>
-              {tSettings.backToTimer}
-            </button>
-          </div>
-
-          <p className={`text-sm ${thSettings.subtle}`}>{tSettings.settingsDesc}</p>
-
-          <div className="mt-6 space-y-4">
-            <label className="block">
-              <div className={`mb-2 flex items-center gap-1 text-sm ${thSettings.muted}`}>
-                <span>{tSettings.focusMinutes}</span>
-                {!canEditTimeSettings ? (
-                  <span className={thSettings.subtle} aria-hidden="true">
-                    <LockIcon />
-                  </span>
-                ) : null}
-              </div>
-              <input
-                type="number"
-                min="1"
-                max="180"
-                value={focusInput}
-                onChange={(e) => setFocusInput(e.target.value)}
-                disabled={!canEditTimeSettings}
-                className={`w-full rounded-xl border px-3 py-3 outline-none disabled:cursor-not-allowed ${thSettings.input} ${thSettings.disabledInput}`}
-              />
-            </label>
-
-            <label className="block">
-              <div className={`mb-2 flex items-center gap-1 text-sm ${thSettings.muted}`}>
-                <span>{tSettings.breakMinutes}</span>
-                {!canEditTimeSettings ? (
-                  <span className={thSettings.subtle} aria-hidden="true">
-                    <LockIcon />
-                  </span>
-                ) : null}
-              </div>
-              <input
-                type="number"
-                min="1"
-                max="60"
-                value={breakInput}
-                onChange={(e) => setBreakInput(e.target.value)}
-                disabled={!canEditTimeSettings}
-                className={`w-full rounded-xl border px-3 py-3 outline-none disabled:cursor-not-allowed ${thSettings.input} ${thSettings.disabledInput}`}
-              />
-              {!canEditTimeSettings ? <p className={`mt-1 text-xs ${thSettings.subtle}`}>{tSettings.timeEditHint}</p> : null}
-            </label>
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className={`mb-2 block text-sm ${thSettings.muted}`}>{tSettings.language}</span>
-                <select
-                  value={languageInput}
-                  onChange={(e) => setLanguageInput(e.target.value)}
-                  className={`w-full rounded-xl border px-3 py-3 outline-none ${thSettings.input}`}
-                >
-                  <option value="ko" className="text-black">
-                    {tSettings.langKo}
-                  </option>
-                  <option value="en" className="text-black">
-                    {tSettings.langEn}
-                  </option>
-                </select>
-              </label>
-
-              <label className="block">
-                <span className={`mb-2 block text-sm ${thSettings.muted}`}>{tSettings.theme}</span>
-                <select
-                  value={themeInput}
-                  onChange={(e) => setThemeInput(e.target.value)}
-                  className={`w-full rounded-xl border px-3 py-3 outline-none ${thSettings.input}`}
-                >
-                  <option value="light" className="text-black">
-                    {tSettings.light}
-                  </option>
-                  <option value="dark" className="text-black">
-                    {tSettings.dark}
-                  </option>
-                </select>
-              </label>
-            </div>
-
-          </div>
-
-          {settingsErrorKey ? <p className="mt-3 text-sm text-red-400">{tSettings[settingsErrorKey]}</p> : null}
-
-          <button onClick={saveSettings} className={`mt-auto rounded-xl border px-4 py-3 text-sm font-semibold transition ${thSettings.primaryBtn}`}>
-            {tSettings.save}
-          </button>
-        </section>
-      </main>
+      <SettingsView
+        tSettings={tSettings}
+        thSettings={thSettings}
+        canEditTimeSettings={canEditTimeSettings}
+        focusInput={focusInput}
+        breakInput={breakInput}
+        languageInput={languageInput}
+        themeInput={themeInput}
+        settingsErrorKey={settingsErrorKey}
+        onFocusInputChange={setFocusInput}
+        onBreakInputChange={setBreakInput}
+        onLanguageChange={setLanguageInput}
+        onThemeChange={setThemeInput}
+        onClose={closeSettings}
+        onSave={saveSettings}
+      />
     );
   }
 
@@ -715,28 +582,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div className={`mt-4 rounded-2xl border p-3 ${th.panel}`}>
-          <p className={`text-sm font-semibold ${th.muted}`}>{t.sessionHistory}</p>
-          {sessionHistory.length === 0 ? (
-            <p className={`mt-2 text-xs ${th.subtle}`}>{t.emptyHistory}</p>
-          ) : (
-            <ul className="mt-2 max-h-28 space-y-2 overflow-y-auto pr-1">
-              {sessionHistory.map((item) => (
-                <li key={item.id} className={`rounded-lg border px-2 py-2 text-xs ${th.panelSoft}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className={`mr-2 font-medium ${th.muted}`}>
-                        {t.cycle} {item.cycle}
-                      </span>
-                      <span className={`${th.subtle}`}>{item.goal || t.focus}</span>
-                    </div>
-                    <span className={`timer-font shrink-0 font-medium ${th.muted}`}>{formatSeconds(item.focusElapsedSeconds ?? 0)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <SessionHistoryPanel th={th} t={t} sessionHistory={sessionHistory} formatSeconds={formatSeconds} />
 
         <div className={`mt-auto rounded-2xl border p-2 backdrop-blur-xl ${th.panel}`}>
           <div className="grid grid-cols-1 gap-2">
@@ -749,120 +595,44 @@ export default function Page() {
           </div>
         </div>
 
-        {showConfetti ? (
-          <div className="confetti-overlay absolute inset-0 z-10 overflow-hidden rounded-[30px] pointer-events-none">
-            {CONFETTI_PIECES.map((piece, index) => (
-              <span
-                key={`${confettiBurstId}-${index}`}
-                className="confetti-piece confetti-burst"
-                style={{
-                  left: `${piece.left}%`,
-                  top: `${piece.top}%`,
-                  width: `${piece.width}px`,
-                  height: `${piece.height}px`,
-                  backgroundColor: piece.color,
-                  "--tx": `${piece.tx}px`,
-                  "--ty": `${piece.ty}px`,
-                  "--rot": `${piece.rotate}deg`,
-                  "--dur": `${piece.duration}s`,
-                  "--delay": `${piece.delay}s`,
-                }}
-              />
-            ))}
-          </div>
-        ) : null}
+        <ConfettiOverlay showConfetti={showConfetti} confettiBurstId={confettiBurstId} confettiPieces={CONFETTI_PIECES} />
 
-        {showGoalPrompt ? (
-          <div className={`absolute inset-0 z-20 grid place-items-center rounded-[30px] p-4 backdrop-blur-sm ${th.modalBackdrop}`}>
-            <div className={`w-full rounded-2xl border p-4 ${th.modalCard}`}>
-              <h2 className="text-lg font-semibold">{goalModalMode === "edit" ? t.goalEditTitle : t.goalTitle}</h2>
-              <p className={`mt-1 text-sm ${th.subtle}`}>{goalModalMode === "edit" ? t.goalEditDesc : t.goalDesc}</p>
+        <GoalPromptModal
+          show={showGoalPrompt}
+          th={th}
+          t={t}
+          goalModalMode={goalModalMode}
+          goalInput={goalInput}
+          goalErrorKey={goalErrorKey}
+          onGoalInputChange={setGoalInput}
+          onCancel={cancelGoalPrompt}
+          onSubmit={submitGoal}
+        />
 
-              <label className="mt-4 block">
-                <span className={`mb-2 block text-sm ${th.muted}`}>{t.goalLabel}</span>
-                <input
-                  autoFocus
-                  type="text"
-                  value={goalInput}
-                  onChange={(e) => setGoalInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") submitGoal();
-                  }}
-                  placeholder={t.goalPlaceholder}
-                  className={`w-full rounded-xl border px-3 py-3 outline-none ${th.input}`}
-                />
-              </label>
+        <ConfirmModal
+          show={showResetPrompt}
+          th={th}
+          title={t.resetTitle}
+          description={t.resetDesc}
+          confirmLabel={t.reset}
+          cancelLabel={t.goalCancel}
+          confirmClassName={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${th.dangerBtn}`}
+          onConfirm={confirmReset}
+          onCancel={cancelResetPrompt}
+        />
 
-              {goalErrorKey ? <p className="mt-2 text-sm text-red-400">{t[goalErrorKey]}</p> : null}
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button onClick={cancelGoalPrompt} className={`rounded-xl border px-3 py-3 text-sm font-medium transition ${th.secondaryBtn}`}>
-                  {t.goalCancel}
-                </button>
-                <button onClick={submitGoal} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${th.primaryBtn}`}>
-                  {goalModalMode === "edit" ? t.goalSave : t.goalStart}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {showResetPrompt ? (
-          <div className={`absolute inset-0 z-30 grid place-items-center rounded-[30px] p-4 backdrop-blur-sm ${th.modalBackdrop}`}>
-            <div className={`w-full rounded-2xl border p-4 ${th.modalCard}`}>
-              <h2 className="text-lg font-semibold">{t.resetTitle}</h2>
-              <p className={`mt-1 text-sm ${th.subtle}`}>{t.resetDesc}</p>
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button onClick={confirmReset} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${th.dangerBtn}`}>
-                  {t.reset}
-                </button>
-                <button onClick={cancelResetPrompt} className={`rounded-xl border px-3 py-3 text-sm font-medium transition ${th.secondaryBtn}`}>
-                  {t.goalCancel}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {showSkipPrompt ? (
-          <div className={`absolute inset-0 z-30 grid place-items-center rounded-[30px] p-4 backdrop-blur-sm ${th.modalBackdrop}`}>
-            <div className={`w-full rounded-2xl border p-4 ${th.modalCard}`}>
-              <h2 className="text-lg font-semibold">{t.skipTitle}</h2>
-              <p className={`mt-1 text-sm ${th.subtle}`}>{isFocusMode ? t.skipDescFocus : t.skipDescBreak}</p>
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button onClick={confirmSkip} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${th.primaryBtn}`}>
-                  {t.skip}
-                </button>
-                <button onClick={cancelSkipPrompt} className={`rounded-xl border px-3 py-3 text-sm font-medium transition ${th.secondaryBtn}`}>
-                  {t.goalCancel}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <ConfirmModal
+          show={showSkipPrompt}
+          th={th}
+          title={t.skipTitle}
+          description={isFocusMode ? t.skipDescFocus : t.skipDescBreak}
+          confirmLabel={t.skip}
+          cancelLabel={t.goalCancel}
+          confirmClassName={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${th.primaryBtn}`}
+          onConfirm={confirmSkip}
+          onCancel={cancelSkipPrompt}
+        />
       </section>
     </main>
-  );
-}
-
-function ResetIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12a9 9 0 0 1 14.13-7.4L21 8" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 3v5h-5" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 0 1-14.13 7.4L3 16" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-5h5" />
-    </svg>
-  );
-}
-
-function SkipIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 6l8 6-8 6V6z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 6l8 6-8 6V6z" />
-    </svg>
   );
 }
