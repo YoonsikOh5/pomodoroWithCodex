@@ -30,6 +30,8 @@ export default function RootLayout({ children }) {
     <html lang="ko">
       <head>
         <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="color-scheme" content="light dark" />
+        <meta name="supported-color-schemes" content="light dark" />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css" />
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600&display=swap" />
       </head>

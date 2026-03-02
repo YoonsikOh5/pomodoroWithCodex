@@ -9,6 +9,11 @@ export default function usePomodoroTimer() {
   const [language, setLanguage] = useState("ko");
   const [theme, setTheme] = useState("light");
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
+
   const [isRunning, setIsRunning] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(true);
   const [cycle, setCycle] = useState(1);
