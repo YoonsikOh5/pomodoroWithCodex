@@ -338,7 +338,7 @@ export default function usePomodoroTimer() {
 
   const onPause = () => {
     setIsRunning(false);
-    setStatusKey("rest");
+    setStatusKey("paused");
   };
 
   const onReset = () => {
@@ -452,6 +452,10 @@ export default function usePomodoroTimer() {
 
   const submitGoal = () => {
     const trimmed = goalInput.trim();
+    if (goalModalMode === "start" && !trimmed) {
+      setGoalErrorKey("goalRequired");
+      return;
+    }
     setCurrentGoal(trimmed);
     setGoalInput(trimmed);
     setShowGoalPrompt(false);
