@@ -306,6 +306,46 @@ def persisted(page):
     return json.loads(raw) if raw else {}
 
 
+def install_notification_mocks(page):
+    page.eval(
+        """
+        (() => {
+          window.__pomodoroNotifications = [];
+          window.__pomodoroVibrations = [];
+
+          function MockNotification(title, options = {}) {
+            window.__pomodoroNotifications.push({ title, options, source: "constructor" });
+          }
+
+          Object.defineProperty(MockNotification, "permission", {
+            configurable: true,
+            get: () => "granted",
+          });
+          MockNotification.requestPermission = () => Promise.resolve("granted");
+          Object.defineProperty(window, "Notification", {
+            configurable: true,
+            value: MockNotification,
+          });
+
+          Object.defineProperty(navigator, "vibrate", {
+            configurable: true,
+            value: (pattern) => {
+              window.__pomodoroVibrations.push(pattern);
+              return true;
+            },
+          });
+
+          if (window.ServiceWorkerRegistration?.prototype) {
+            window.ServiceWorkerRegistration.prototype.showNotification = function(title, options = {}) {
+              window.__pomodoroNotifications.push({ title, options, source: "serviceWorker" });
+              return Promise.resolve();
+            };
+          }
+        })()
+        """
+    )
+
+
 def assert_contains(haystack, needle):
     assert needle in haystack, f"Expected to find {needle!r} in page text."
 
@@ -348,6 +388,7 @@ def run():
         wait_until(page, "document.readyState === 'complete' || document.readyState === 'interactive'", message="page load")
         page.eval("window.localStorage.clear(); location.reload();")
         wait_until(page, "document.readyState === 'complete' || document.readyState === 'interactive'", message="reload")
+        install_notification_mocks(page)
 
         text = body_text(page)
         assert_contains(text, "뽀모도로")
@@ -365,12 +406,12 @@ def run():
         wait_until(page, "document.body.innerText.includes('범위: 집중 1~180분, 휴식 1~60분')", message="range error")
         results.append("TC-02 settings validation")
 
-        set_number(page, 0, 1)
+        set_number(page, 0, 11)
         set_number(page, 1, 1)
         set_select(page, 1, "dark")
         set_select(page, 2, "runner")
         click_text(page, "저장")
-        wait_until(page, "document.body.innerText.includes('01:00')", message="saved settings")
+        wait_until(page, "document.body.innerText.includes('11:00')", message="saved settings")
         assert persisted(page)["settings"]["theme"] == "dark"
         assert persisted(page)["settings"]["progressBarType"] == "runner"
         results.append("TC-03 settings save")
@@ -384,7 +425,13 @@ def run():
         set_text_input(page, "테스트 케이스 검증")
         click_text(page, "시작하기")
         wait_until(page, "document.body.innerText.includes('일시정지')", message="timer running")
-        wait_until(page, "document.body.innerText.includes('00:59')", timeout=3, message="countdown")
+        wait_until(page, "document.body.innerText.includes('10:59')", timeout=3, message="countdown")
+        wait_until(
+            page,
+            "window.__pomodoroNotifications.some((item) => item.title.includes('테스트 케이스 검증 시작, 종료 예정'))",
+            timeout=3,
+            message="start notification",
+        )
         results.append("TC-05 start with goal and countdown")
 
         page.eval(
@@ -401,11 +448,42 @@ def run():
         )
         wait_until(
             page,
-            "JSON.parse(localStorage.getItem('pomodoro:persist:v1')).snapshot.remainingSeconds <= 40",
+            "JSON.parse(localStorage.getItem('pomodoro:persist:v1')).snapshot.remainingSeconds <= 640",
             timeout=3,
             message="background elapsed correction",
         )
         results.append("TC-06 background elapsed correction")
+
+        page.eval(
+            """
+            (() => {
+              window.__pomodoroTimeOffset = 70000;
+              window.dispatchEvent(new Event("focus"));
+            })()
+            """
+        )
+        wait_until(
+            page,
+            "window.__pomodoroNotifications.some((item) => item.title === '10분 남음')",
+            timeout=3,
+            message="10 minute notification",
+        )
+
+        page.eval(
+            """
+            (() => {
+              window.__pomodoroTimeOffset = 370000;
+              window.dispatchEvent(new Event("focus"));
+            })()
+            """
+        )
+        wait_until(
+            page,
+            "window.__pomodoroNotifications.some((item) => item.title === '5분 남음')",
+            timeout=3,
+            message="5 minute notification",
+        )
+        results.append("TC-07 milestone notifications")
 
         click_text(page, "일시정지")
         wait_until(page, "document.body.innerText.includes('다시 시작하기')", message="paused")
@@ -415,21 +493,21 @@ def run():
         assert persisted(page)["snapshot"]["statusKey"] == "paused"
         click_text(page, "다시 시작하기")
         wait_until(page, f"JSON.parse(localStorage.getItem('pomodoro:persist:v1')).snapshot.remainingSeconds < {paused}", timeout=3, message="resume countdown")
-        results.append("TC-07 pause and resume")
+        results.append("TC-08 pause and resume")
 
         click_aria(page, "수정")
         wait_until(page, "document.body.innerText.includes('집중 문구 수정')", message="edit goal modal")
         set_text_input(page, "수정된 목표")
         click_text(page, "저장")
         wait_until(page, "document.body.innerText.includes('수정된 목표')", message="goal edited")
-        results.append("TC-08 edit goal")
+        results.append("TC-09 edit goal")
 
         click_aria(page, "스킵")
         wait_until(page, "document.body.innerText.includes('정말로 스킵하시겠어요?')", message="skip modal")
         click_text(page, "스킵")
         wait_until(page, "JSON.parse(localStorage.getItem('pomodoro:persist:v1')).sessionHistory.length === 1", message="history after skip")
         assert persisted(page)["snapshot"]["isFocusMode"] is False
-        results.append("TC-09 skip focus")
+        results.append("TC-10 skip focus")
 
         click_aria(page, "스킵")
         wait_until(page, "document.body.innerText.includes('정말로 스킵하시겠어요?')", message="skip break modal")
@@ -437,14 +515,36 @@ def run():
         wait_until(page, "JSON.parse(localStorage.getItem('pomodoro:persist:v1')).snapshot.cycle === 2", message="cycle 2")
         assert persisted(page)["snapshot"]["isRunning"] is False
         assert persisted(page)["snapshot"]["isFocusMode"] is True
-        results.append("TC-10 skip break")
+        results.append("TC-11 skip break")
+
+        click_text(page, "다음 세션 시작하기")
+        wait_until(page, "document.body.innerText.includes('이번 타임 목표')", message="next goal modal")
+        set_text_input(page, "완료 알림 검증")
+        click_text(page, "시작하기")
+        wait_until(page, "document.body.innerText.includes('일시정지')", message="second timer running")
+        page.eval(
+            """
+            (() => {
+              window.__pomodoroTimeOffset = 1031000;
+              window.dispatchEvent(new Event("focus"));
+            })()
+            """
+        )
+        wait_until(
+            page,
+            "window.__pomodoroNotifications.some((item) => item.title === '완료 알림 검증 완료')",
+            timeout=3,
+            message="completion notification",
+        )
+        wait_until(page, "window.__pomodoroVibrations.length > 0", timeout=3, message="completion vibration")
+        results.append("TC-12 completion notification feedback")
 
         click_aria(page, "리셋")
         wait_until(page, "document.body.innerText.includes('정말로 리셋하시겠어요?')", message="reset modal")
         click_text(page, "리셋")
         wait_until(page, "JSON.parse(localStorage.getItem('pomodoro:persist:v1')).sessionHistory.length === 0", message="reset clears history")
         assert persisted(page)["snapshot"]["cycle"] == 1
-        results.append("TC-11 reset")
+        results.append("TC-13 reset")
 
         for path in [
             "/manifest.webmanifest",
@@ -454,7 +554,7 @@ def run():
             "/icons/apple-touch-icon.png",
         ]:
             assert_http_200(path)
-        results.append("TC-12 PWA assets")
+        results.append("TC-14 PWA assets")
 
         print(json.dumps({"ok": True, "results": results}, ensure_ascii=False, indent=2))
     finally:

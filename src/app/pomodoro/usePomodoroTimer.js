@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CONFETTI_DURATION_MS } from "./confetti";
+import {
+  focusCompleteMessage,
+  focusNotificationSubject,
+  focusStartMessage,
+  playCompletionFeedback,
+  prepareCompletionSound,
+  remainingMessage,
+  showPomodoroNotification,
+} from "./notifications";
 
 const DEFAULT_FOCUS_MINUTES = 50;
 const DEFAULT_BREAK_MINUTES = 10;
@@ -159,6 +168,8 @@ export default function usePomodoroTimer() {
   const [confettiBurstId, setConfettiBurstId] = useState(0);
   const lastLoggedCycleRef = useRef(null);
   const lastTickAtRef = useRef(Date.now());
+  const audioContextRef = useRef(null);
+  const notifiedRemainingMarksRef = useRef(new Set());
   const hasHydratedRef = useRef(false);
 
   const focusDurationSeconds = focusMinutes * 60;
@@ -171,6 +182,16 @@ export default function usePomodoroTimer() {
     if (totalSeconds <= 0) return 0;
     return Math.min(100, Math.max(0, ((totalSeconds - remainingSeconds) / totalSeconds) * 100));
   }, [remainingSeconds, totalSeconds]);
+
+  const notifyFocusStart = (goal, durationSeconds) => {
+    const endsAt = Date.now() + durationSeconds * 1000;
+    notifiedRemainingMarksRef.current = new Set();
+    prepareCompletionSound(audioContextRef);
+    showPomodoroNotification(focusStartMessage(goal, endsAt), {
+      tag: "pomodoro-focus-start",
+      renotify: true,
+    });
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -275,6 +296,26 @@ export default function usePomodoroTimer() {
   }, [isRunning, timerBlocked]);
 
   useEffect(() => {
+    if (!isRunning || !isFocusMode || timerBlocked || remainingSeconds <= 0) return;
+
+    const milestone =
+      remainingSeconds <= 5 * 60 && focusDurationSeconds > 5 * 60
+        ? 5
+        : remainingSeconds <= 10 * 60 && focusDurationSeconds > 10 * 60
+          ? 10
+          : null;
+
+    if (!milestone || notifiedRemainingMarksRef.current.has(milestone)) return;
+
+    notifiedRemainingMarksRef.current.add(milestone);
+    showPomodoroNotification(remainingMessage(milestone), {
+      body: focusNotificationSubject(currentGoal),
+      tag: `pomodoro-focus-${milestone}`,
+      renotify: true,
+    });
+  }, [isRunning, isFocusMode, timerBlocked, remainingSeconds, focusDurationSeconds, currentGoal]);
+
+  useEffect(() => {
     if (!isRunning || timerBlocked) return;
 
     const syncTimer = () => {
@@ -312,6 +353,25 @@ export default function usePomodoroTimer() {
         ]);
         lastLoggedCycleRef.current = completedFocusEntries[completedFocusEntries.length - 1].cycle;
         setConfettiBurstId((v) => v + 1);
+        completedFocusEntries.forEach((entry) => {
+          showPomodoroNotification(focusCompleteMessage(entry.goal), {
+            body: "휴식이 시작됐어요.",
+            tag: "pomodoro-focus-complete",
+            renotify: true,
+            vibrate: true,
+          });
+        });
+        playCompletionFeedback(audioContextRef);
+      }
+
+      if (!isFocusMode && nextSnapshot.isFocusMode && !nextSnapshot.isRunning && nextSnapshot.cycle > cycle) {
+        showPomodoroNotification("휴식 완료", {
+          body: "다음 집중 세션을 시작할 준비가 됐어요.",
+          tag: "pomodoro-break-complete",
+          renotify: true,
+          vibrate: true,
+        });
+        playCompletionFeedback(audioContextRef);
       }
 
       setIsFocusMode(nextSnapshot.isFocusMode);
@@ -367,6 +427,7 @@ export default function usePomodoroTimer() {
       setShowGoalPrompt(true);
       return;
     }
+    prepareCompletionSound(audioContextRef);
     setIsRunning(true);
     setStatusKey("running");
   };
@@ -497,6 +558,7 @@ export default function usePomodoroTimer() {
     setGoalModalMode("start");
     setGoalErrorKey("");
     if (goalModalMode === "start") {
+      notifyFocusStart(trimmed, remainingSeconds);
       setIsRunning(true);
       setStatusKey("running");
     }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "pomodoro-v1";
+const CACHE_NAME = "pomodoro-v2";
 const PRECACHE_URLS = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -41,5 +41,21 @@ self.addEventListener("fetch", (event) => {
         })
         .catch(() => caches.match("/"));
     })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        const existingClient = clientList.find((client) => "focus" in client);
+        if (existingClient) return existingClient.focus();
+        if (clients.openWindow) return clients.openWindow("/");
+        return null;
+      })
+      .catch(() => {})
   );
 });
