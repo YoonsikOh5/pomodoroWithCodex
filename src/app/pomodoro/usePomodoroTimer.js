@@ -38,7 +38,7 @@ function normalizeHistory(items) {
     .filter(Boolean);
 }
 
-function restoreSnapshot(snapshot, focusDurationSeconds, breakDurationSeconds) {
+function advanceSnapshot(snapshot, focusDurationSeconds, breakDurationSeconds, elapsedSeconds) {
   const initialIsFocusMode = snapshot?.isFocusMode !== false;
   const initialCycle = clampInteger(snapshot?.cycle, 1, 999999, 1);
   const initialRemaining = clampInteger(
@@ -58,19 +58,19 @@ function restoreSnapshot(snapshot, focusDurationSeconds, breakDurationSeconds) {
   let currentGoal = initialCurrentGoal;
   let statusKey = initialStatusKey;
   const completedFocusEntries = [];
+  let elapsed = Math.max(0, Math.floor(elapsedSeconds));
 
   if (isRunning) {
-    const savedAt = Number.isFinite(snapshot?.savedAt) ? snapshot.savedAt : Date.now();
-    let elapsedSeconds = Math.max(0, Math.floor((Date.now() - savedAt) / 1000));
+    while (isRunning) {
+      if (remainingSeconds > 0) {
+        if (elapsed < remainingSeconds) {
+          remainingSeconds -= elapsed;
+          elapsed = 0;
+          break;
+        }
 
-    while (elapsedSeconds > 0 && isRunning) {
-      if (elapsedSeconds < remainingSeconds) {
-        remainingSeconds -= elapsedSeconds;
-        elapsedSeconds = 0;
-        break;
+        elapsed -= remainingSeconds;
       }
-
-      elapsedSeconds -= remainingSeconds;
 
       if (isFocusMode) {
         completedFocusEntries.push({
@@ -81,6 +81,9 @@ function restoreSnapshot(snapshot, focusDurationSeconds, breakDurationSeconds) {
         isFocusMode = false;
         statusKey = "focusDone";
         remainingSeconds = breakDurationSeconds;
+        if (elapsed <= 0) {
+          break;
+        }
         continue;
       }
 
@@ -109,6 +112,13 @@ function restoreSnapshot(snapshot, focusDurationSeconds, breakDurationSeconds) {
     statusKey,
     completedFocusEntries,
   };
+}
+
+function restoreSnapshot(snapshot, focusDurationSeconds, breakDurationSeconds) {
+  const isRunning = Boolean(snapshot?.isRunning);
+  const savedAt = Number.isFinite(snapshot?.savedAt) ? snapshot.savedAt : Date.now();
+  const elapsedSeconds = isRunning ? Math.max(0, Math.floor((Date.now() - savedAt) / 1000)) : 0;
+  return advanceSnapshot(snapshot, focusDurationSeconds, breakDurationSeconds, elapsedSeconds);
 }
 
 export default function usePomodoroTimer() {
@@ -148,12 +158,14 @@ export default function usePomodoroTimer() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [confettiBurstId, setConfettiBurstId] = useState(0);
   const lastLoggedCycleRef = useRef(null);
+  const lastTickAtRef = useRef(Date.now());
   const hasHydratedRef = useRef(false);
 
   const focusDurationSeconds = focusMinutes * 60;
   const breakDurationSeconds = breakMinutes * 60;
   const totalSeconds = isFocusMode ? focusDurationSeconds : breakDurationSeconds;
   const canEditTimeSettings = !isRunning && isFocusMode && remainingSeconds === focusDurationSeconds && currentGoal.trim() === "";
+  const timerBlocked = showSettings || showGoalPrompt || showResetPrompt || showSkipPrompt;
 
   const progressPercent = useMemo(() => {
     if (totalSeconds <= 0) return 0;
@@ -259,56 +271,79 @@ export default function usePomodoroTimer() {
   ]);
 
   useEffect(() => {
-    if (!isRunning || showSettings || showGoalPrompt || showResetPrompt || showSkipPrompt) return;
+    lastTickAtRef.current = Date.now();
+  }, [isRunning, timerBlocked]);
 
-    const id = setTimeout(() => {
-      if (remainingSeconds <= 0) {
-        if (isFocusMode) {
-          if (lastLoggedCycleRef.current !== cycle) {
-            const goalForHistory = currentGoal.trim();
-            const elapsedFocusSeconds = Math.max(0, focusDurationSeconds - remainingSeconds);
-            setSessionHistory((history) => [
-              ...history,
-              {
-                id: Date.now() + Math.random(),
-                cycle,
-                goal: goalForHistory,
-                focusElapsedSeconds: elapsedFocusSeconds,
-              },
-            ]);
-            lastLoggedCycleRef.current = cycle;
-            setConfettiBurstId((v) => v + 1);
-          }
-          setIsFocusMode(false);
-          setStatusKey("focusDone");
-          setRemainingSeconds(breakDurationSeconds);
-          return;
-        }
+  useEffect(() => {
+    if (!isRunning || timerBlocked) return;
 
-        setIsFocusMode(true);
-        setCycle((v) => v + 1);
-        setCurrentGoal("");
-        setIsRunning(false);
-        setStatusKey("ready");
-        setRemainingSeconds(focusDurationSeconds);
-        return;
+    const syncTimer = () => {
+      const now = Date.now();
+      const elapsedSeconds = Math.max(0, Math.floor((now - lastTickAtRef.current) / 1000));
+      if (elapsedSeconds <= 0) return;
+
+      lastTickAtRef.current = now;
+
+      const nextSnapshot = advanceSnapshot(
+        {
+          isFocusMode,
+          cycle,
+          remainingSeconds,
+          isRunning,
+          currentGoal,
+          statusKey,
+        },
+        focusDurationSeconds,
+        breakDurationSeconds,
+        elapsedSeconds
+      );
+      const completedFocusEntries = nextSnapshot.completedFocusEntries.filter(
+        (entry) => lastLoggedCycleRef.current !== entry.cycle
+      );
+
+      if (completedFocusEntries.length > 0) {
+        const entryTimestamp = Date.now();
+        setSessionHistory((history) => [
+          ...history,
+          ...completedFocusEntries.map((entry, index) => ({
+            ...entry,
+            id: `${entryTimestamp}-${entry.cycle}-${index}-${Math.random()}`,
+          })),
+        ]);
+        lastLoggedCycleRef.current = completedFocusEntries[completedFocusEntries.length - 1].cycle;
+        setConfettiBurstId((v) => v + 1);
       }
 
-      setRemainingSeconds((prev) => prev - 1);
-    }, 1000);
+      setIsFocusMode(nextSnapshot.isFocusMode);
+      setCycle(nextSnapshot.cycle);
+      setRemainingSeconds(nextSnapshot.remainingSeconds);
+      setIsRunning(nextSnapshot.isRunning);
+      setCurrentGoal(nextSnapshot.currentGoal);
+      setStatusKey(nextSnapshot.statusKey);
+    };
 
-    return () => clearTimeout(id);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        syncTimer();
+      }
+    };
+
+    const id = setTimeout(syncTimer, 1000);
+    window.addEventListener("focus", syncTimer);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearTimeout(id);
+      window.removeEventListener("focus", syncTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [
     isRunning,
+    timerBlocked,
     isFocusMode,
     remainingSeconds,
-    focusMinutes,
-    breakMinutes,
-    showSettings,
-    showGoalPrompt,
-    showResetPrompt,
-    showSkipPrompt,
     currentGoal,
+    statusKey,
     cycle,
     focusDurationSeconds,
     breakDurationSeconds,
